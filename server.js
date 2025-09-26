@@ -9,18 +9,18 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// === Config ===
+// ==== CONFIG FEED PÚBLICO ====
 const FEED_URL =
   process.env.PLACSP_FEED_URL ||
   "https://contrataciondelestado.es/sindicacion/sindicacion_1_2000.json";
 
-// --- utilidades ---
+// ==== UTILIDADES ====
 const norm = (s = "") =>
   s.toString().normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
 const containsAny = (texto, arr) => {
   const t = norm(texto);
-  return arr.some((k) => t.includes(norm(k)));
+  return arr.some(k => t.includes(norm(k)));
 };
 
 const orgMatch = (orgFilter, orgNombre) => {
@@ -46,40 +46,29 @@ const mapItem = (it = {}) => ({
   importe: it.presupuesto || it.importe || it.precio || "",
   fechaPublicacion: it.fecha || it.publicacion || it.date || "",
   fechaLimite: it.fecha_limite || it.limitDate || "",
-  url: it.enlace || it.link || it.url || "",
+  url: it.enlace || it.link || it.url || ""
 });
 
-// --- lógica común de búsqueda (reutilizable por /search y /invoke) ---
+// ==== LÓGICA COMÚN ====
 async function runSearch({ org = "todas", q = "", days = 120, limit = 100 }) {
   const r = await fetch(FEED_URL, { timeout: 15000 });
   if (!r.ok) throw new Error(`Feed HTTP ${r.status}`);
   const data = await r.json();
 
-  const rawItems = Array.isArray(data?.items)
-    ? data.items
-    : Array.isArray(data)
-    ? data
-    : [];
-
-  const items = rawItems.map(mapItem).filter((it) => {
+  const rawItems = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+  const items = rawItems.map(mapItem).filter(it => {
     const okOrg = orgMatch(String(org).toLowerCase(), it.organismo);
     const kw = q ? [q, ...KEYWORDS] : KEYWORDS;
-    const hayKW = containsAny(
-      `${it.titulo} ${it.organismo} ${it.procedimiento} ${it.estado}`,
-      kw
-    );
+    const hayKW = containsAny(`${it.titulo} ${it.organismo} ${it.procedimiento} ${it.estado}`, kw);
     const okFecha = inLastDays(it.fechaPublicacion, days);
     return okOrg && hayKW && okFecha;
   });
 
-  items.sort(
-    (a, b) => new Date(b.fechaPublicacion) - new Date(a.fechaPublicacion)
-  );
-
+  items.sort((a, b) => new Date(b.fechaPublicacion) - new Date(a.fechaPublicacion));
   return items.slice(0, Number(limit || 100));
 }
 
-// --- endpoints existentes ---
+// ==== ENDPOINTS EXISTENTES ====
 app.get("/health", (_, res) => res.send("ok"));
 
 app.get("/search", async (req, res) => {
@@ -96,9 +85,9 @@ app.get("/search", async (req, res) => {
   }
 });
 
-// --- MCP: manifiesto SSE y ejecución de herramientas ---
+// ==== MCP: /sse (manifiesto) y /invoke (ejecución de tool) ====
 
-// 2.1) /sse expone el manifiesto del conector (tools)
+// /sse: ChatGPT lee aquí el manifiesto y descubre la tool
 app.get("/sse", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache");
@@ -111,71 +100,40 @@ app.get("/sse", (req, res) => {
       {
         name: "placsp.search",
         description:
-          "Busca licitaciones públicas en la Plataforma de Contratación del Sector Público filtrando por organismo y palabras clave de maquinaria (láser, waterjet, mecanizado, plegado, soldadura, etc.).",
+          "Busca licitaciones en la Plataforma del Sector Público filtrando por organismo y palabras clave de maquinaria.",
         input_schema: {
           type: "object",
           properties: {
-            org: {
-              type: "string",
-              enum: ["inta", "ensa", "navantia", "fnmt", "indra", "todas"],
-              description:
-                "Organismo a filtrar. Usa 'todas' para no filtrar por organismo.",
-            },
-            q: {
-              type: "string",
-              description:
-                "Palabra clave adicional. Por defecto ya se usan keywords de maquinaria.",
-            },
-            days: {
-              type: "integer",
-              minimum: 1,
-              maximum: 3650,
-              description: "Días hacia atrás a considerar (por defecto 120).",
-            },
-            limit: {
-              type: "integer",
-              minimum: 1,
-              maximum: 500,
-              description: "Máximo de resultados (por defecto 100).",
-            },
+            org: { type: "string", enum: ["inta","ensa","navantia","fnmt","indra","todas"] },
+            q: { type: "string" },
+            days: { type: "integer", minimum: 1, maximum: 3650 },
+            limit: { type: "integer", minimum: 1, maximum: 500 }
           },
-          required: [],
-        },
-      },
-    ],
+          required: []
+        }
+      }
+    ]
   };
 
-  // Enviamos el manifiesto como primer evento
   res.write(`data: ${JSON.stringify({ type: "manifest", manifest })}\n\n`);
-
-  // mantenemos viva la conexión
   const keepAlive = setInterval(() => res.write(":\n\n"), 25000);
-  req.on("close", () => {
-    clearInterval(keepAlive);
-    res.end();
-  });
+  req.on("close", () => { clearInterval(keepAlive); res.end(); });
 });
 
-// 2.2) /invoke ejecuta una tool con argumentos
+// /invoke: ChatGPT te llama aquí con { tool, args }
 app.post("/invoke", async (req, res) => {
   try {
     const { tool, args } = req.body || {};
-    if (tool !== "placsp.search") {
-      return res.status(400).json({ error: "Unknown tool" });
-    }
+    if (tool !== "placsp.search") return res.status(400).json({ error: "Unknown tool" });
 
     const items = await runSearch({
       org: args?.org || "todas",
       q: args?.q || "",
       days: Number(args?.days || 120),
-      limit: Number(args?.limit || 100),
+      limit: Number(args?.limit || 100)
     });
 
-    return res.json({
-      type: "tool_result",
-      tool,
-      content: items,
-    });
+    res.json({ type: "tool_result", tool, content: items });
   } catch (err) {
     res.status(500).json({ error: err.message || "invoke error" });
   }

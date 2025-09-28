@@ -221,6 +221,24 @@ app.post("/invoke", async (req, res) => {
   }
 });
 
+// ===== DEBUG: ver cuántos items trae el feed y 3 ejemplos =====
+app.get("/debug", async (req, res) => {
+  try {
+    const feed = await fetchFeed();          // lee el ATOM/JSON real
+    const rawItems = extractItems(feed);     // extrae las entradas
+    const mapped = rawItems.map(mapItem);    // aplica tu normalización
+
+    res.json({
+      feedType: feed.type,
+      rawCount: rawItems.length,
+      mappedCount: mapped.length,
+      samples: mapped.slice(0, 3)            // primeras 3 entradas
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`PLACSP connector listening on ${PORT}`);
 });

@@ -1,9 +1,16 @@
 export const ORG_ALIASES = {
-  inta: ["instituto nacional de técnica aeroespacial", "inta"],
-  ensa: ["equipos nucleares", "ensa"],
-  navantia: ["navantia", "avantia"], // incluyo tu alias
+  inta: [
+    "instituto nacional de técnica aeroespacial",
+    "inta",
+    "instituto nacional de tecnica aeroespacial",
+    "instituto nacional de t\u00e9cnica aeroespacial",
+    "inta esteban terradas",
+    "instituto nacional de t\u00e9cnica aeroespacial esteban terradas"
+  ],
+  ensa: ["equipos nucleares", "enSa", "equipos nucleares s.a."],
+  navantia: ["navantia", "sociedad estatal navantia"],
   fnmt: ["fábrica nacional de moneda y timbre", "fnmt", "fnmt-rcm"],
-  indra: ["indra", "indra sistemas"]
+  indra: ["indra", "indra sistemas", "indra sistemas s.a."]
 };
 
 export const KEYWORDS = [

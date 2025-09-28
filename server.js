@@ -78,18 +78,33 @@ function mockItems() {
 
 // ===== LECTURA FEED REAL =====
 async function fetchFeed() {
-  const r = await fetch(FEED_URL, { timeout: 15000 });
+  const r = await fetch(FEED_URL, {
+    // algunos servidores no devuelven nada si no ven un User-Agent "normal"
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept": "application/atom+xml, application/xml;q=0.9, */*;q=0.8",
+      "Accept-Language": "es-ES,es;q=0.9,en;q=0.8"
+    },
+    // Render + Cloudflare a veces necesitan más margen
+    // (node-fetch soporta este timeout así)
+    timeout: 20000
+  });
+
   if (!r.ok) throw new Error(`Feed HTTP ${r.status}`);
+
   const text = await r.text();
   const t = text.trim();
+
+  // ¿JSON?
   if (t.startsWith("{") || t.startsWith("[")) {
     return { type: "json", data: JSON.parse(t) };
   }
+
+  // ATOM/XML
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
   const xml = parser.parse(t);
   return { type: "xml", data: xml };
 }
-
 function extractItems(feed) {
   if (feed.type === "json") {
     const d = feed.data;
